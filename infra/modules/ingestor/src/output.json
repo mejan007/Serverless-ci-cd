@@ -1,0 +1,1 @@
+{"statusCode": 200, "body": "{\"correlation_id\": \"dd769813-4bf8-4a16-afe7-fe7b73530278\", \"message\": \"File inputs/stocks.json with ETag 6607a309a979f5382adf1db8b378179b already processed\", \"valid_count\": 0, \"invalid_count\": 0}"}
