@@ -103,7 +103,11 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
       },
       {
         Effect   = "Allow"
-        Action   = "codestar-connections:UseConnection"
+        Action   = [
+          "codepipeline:StartPipelineExecution",
+          "codepipeline:GetPipelineExecution",
+          "codepipeline:ListPipelineExecutions"
+        ]
         Resource = var.github_connection_arn
       }
     ]
