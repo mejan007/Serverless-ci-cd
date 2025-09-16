@@ -4,7 +4,7 @@ provider "aws" {
 
 locals {
   common_tags = {
-    creator = "mejan"
+    creator = var.creator_name
   }
 }
 
@@ -14,7 +14,7 @@ resource "random_id" "random_suffix" {
 
 
 resource "aws_ses_email_identity" "sender" {
-  email = "mejan.lamichhane15@gmail.com"
+  email = var.sender_email
 }
 
 module "data_bucket" {
@@ -36,7 +36,7 @@ module "data_bucket" {
 
 module "dynamo_db" {
   source = "./modules/dynamodb"
-
+  table_name = var.table_name
 
 }
 
@@ -95,6 +95,7 @@ module "analyzer_function" {
       Name = "${local.common_tags.creator}-analyzer-${random_id.random_suffix.hex}"
     }
   )
+  table_name = var.table_name
 }
 
 module "eventbridge" {
@@ -116,8 +117,17 @@ module "notifier" {
     }
   )
 
+  sender_email = var.sender_email
+  receiver_email = var.receiver_email
+
+}
 
 
+module "pipeline" {
+  source = "./modules/pipeline"
+
+  github_connection_arn = var.github_connection_arn
+  branch = var.branch
 }
 
 resource "aws_lambda_event_source_mapping" "dynamodb_stream_trigger" {
