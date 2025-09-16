@@ -26,7 +26,7 @@ phases:
       - cd infra
       - terraform init -input=false -upgrade
       - echo "Running Terraform plan..."
-      - terraform plan -out=tfplan -var "env=$BRANCH_NAME"  # Environment-specific
+      - terraform plan -out=tfplan
       - echo "Uploading plan to S3 for review..."
       - aws s3 cp tfplan s3://mejan-pipeline-artifacts-$BRANCH_NAME/tfplan.binary  # Store for later view (use AWS CLI)
       - echo "Terraform plan uploaded."
