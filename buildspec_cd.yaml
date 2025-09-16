@@ -28,7 +28,7 @@ phases:
       - echo "Running Terraform plan..."
       - terraform plan -out=tfplan
       - echo "Uploading plan to S3 for review..."
-      - aws s3 cp tfplan s3://mejan-pipeline-artifacts-$BRANCH_NAME/tfplan.binary  # Store for later view (use AWS CLI)
+      - aws s3 cp tfplan s3://mejan-pipeline-artifacts/tfplan.binary  # Store for later view (use AWS CLI)
       - echo "Terraform plan uploaded."
 
   post_build:
