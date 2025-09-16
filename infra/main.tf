@@ -122,6 +122,14 @@ module "notifier" {
 
 }
 
+
+module "pipeline" {
+  source = "./modules/pipeline"
+
+  github_connection_arn = var.github_connection_arn
+  branch = var.branch
+}
+
 resource "aws_lambda_event_source_mapping" "dynamodb_stream_trigger" {
 
   event_source_arn  = module.dynamo_db.table_stream_arn

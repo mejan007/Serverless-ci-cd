@@ -19,7 +19,7 @@ variable "table_name" {
   type = string
 }
 
-variable "env" {
+variable "branch" {
   type = string
 }
 

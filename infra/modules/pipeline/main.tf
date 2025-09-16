@@ -1,10 +1,10 @@
 resource "aws_s3_bucket" "pipeline_artifacts" {
-  bucket = "mejan-pipeline-artifacts-${var.env}"
+  bucket = "mejan-pipeline-artifacts"
 }
 
 
 resource "aws_iam_role" "codebuild_role" {
-  name = "mejan-codebuild-role-${var.env}"
+  name = "mejan-codebuild-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -34,8 +34,12 @@ resource "aws_iam_role_policy" "codebuild_policy" {
   })
 }
 
-resource "aws_codebuild_project" "build" {
-  name          = "mejan-build-${var.env}"
+############################
+# CI CodeBuild project (tests, validation, package)
+############################
+
+resource "aws_codebuild_project" "ci" {
+  name          = "mejan-ci"
   service_role  = aws_iam_role.codebuild_role.arn
   artifacts {
     type = "CODEPIPELINE"
@@ -47,13 +51,36 @@ resource "aws_codebuild_project" "build" {
   }
   source {
     type = "CODEPIPELINE"
-    buildspec = "buildspec.yaml"
+    buildspec = "buildspec_ci.yaml"
+  }
+}
+
+############################
+# CD CodeBuild project (deploy)
+############################
+resource "aws_codebuild_project" "cd" {
+  name         = "mejan-cd"
+  service_role = aws_iam_role.codebuild_role.arn
+
+  artifacts {
+    type = "CODEPIPELINE"
+  }
+
+  environment {
+    compute_type = "BUILD_GENERAL1_SMALL"
+    image        = "aws/codebuild/standard:5.0"
+    type         = "LINUX_CONTAINER"
+  }
+
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = "buildspec_cd.yaml"
   }
 }
 
 
 resource "aws_iam_role" "codepipeline_role" {
-  name = "mejan-codepipeline-role-${var.env}"
+  name = "mejan-codepipeline-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -84,7 +111,7 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
 }
 
 resource "aws_codepipeline" "pipeline" {
-  name     = "mejan-pipeline-${var.env}"
+  name     = "mejan-pipeline"
   role_arn = aws_iam_role.codepipeline_role.arn
   artifact_store {
     location = aws_s3_bucket.pipeline_artifacts.bucket
@@ -102,7 +129,7 @@ resource "aws_codepipeline" "pipeline" {
       configuration = {
         ConnectionArn    = var.github_connection_arn
         FullRepositoryId = "mejan007/Serverless-ci-cd"
-        BranchName       = var.env
+        BranchName       = var.branch
       }
     }
   }
@@ -117,9 +144,9 @@ resource "aws_codepipeline" "pipeline" {
       output_artifacts = ["build_output"]
       version          = "1"
       configuration = {
-        ProjectName = aws_codebuild_project.build.name
+        ProjectName = aws_codebuild_project.ci.name
         EnvironmentVariables = jsonencode([
-          { name = "BRANCH_NAME", value = var.env }
+          { name = "BRANCH_NAME", value = var.branch }
         ])
       }
     }
@@ -128,13 +155,13 @@ resource "aws_codepipeline" "pipeline" {
     name = "Deploy"
     action {
       name            = "Deploy"
-      category        = "Deploy"
+      category        = "Build"
       owner           = "AWS"
       provider        = "CodeBuild"
       input_artifacts = ["build_output"]
       version         = "1"
       configuration = {
-        ProjectName = aws_codebuild_project.build.name
+        ProjectName = aws_codebuild_project.cd.name
       }
     }
   }
