@@ -7,9 +7,9 @@ phases:
     commands:
       - echo "Installing OS dependencies..."
       - yum install -y make zip unzip wget awscli || true  # Add AWS CLI for S3 upload
-      - echo "Installing Terraform 1.9.7..."
-      - wget https://releases.hashicorp.com/terraform/1.9.7/terraform_1.9.7_linux_amd64.zip
-      - unzip terraform_1.9.7_linux_amd64.zip -d /usr/local/bin/
+      - echo "Installing Terraform 1.13.1..."
+      - wget https://releases.hashicorp.com/terraform/1.13.1/terraform_1.13.1_linux_amd64.zip
+      - unzip terraform_1.13.1_linux_amd64.zip -d /usr/local/bin/
       - terraform --version
       - python3 --version
       - echo "Installing Python dependencies..."
