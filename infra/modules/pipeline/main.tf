@@ -145,9 +145,9 @@ resource "aws_codepipeline" "pipeline" {
       version          = "1"
       configuration = {
         ProjectName = aws_codebuild_project.ci.name
-        EnvironmentVariables = jsonencode([
-          { name = "BRANCH_NAME", value = var.branch }
-        ])
+        # EnvironmentVariables = jsonencode([
+        #   { name = "BRANCH_NAME", value = var.branch }
+        # ])
       }
     }
   }
