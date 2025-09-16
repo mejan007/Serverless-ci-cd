@@ -4,6 +4,7 @@ import logging
 import datetime
 import uuid
 import statistics
+import os
 
 # Logging setup
 logger = logging.getLogger()
@@ -28,7 +29,7 @@ s3_client = boto3.client("s3")
 dynamodb = boto3.resource("dynamodb")
 bedrock = boto3.client("bedrock-runtime")
 
-TABLE_NAME = "mejan-StockAnalysis"
+TABLE_NAME = os.environ["TABLE_NAME"]
 
 def compute_metrics(values):
     """Compute key metrics from OHLCV data."""

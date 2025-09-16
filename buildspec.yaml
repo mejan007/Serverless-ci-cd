@@ -1,0 +1,46 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - echo "Installing OS dependencies..."
+      - yum install -y make zip unzip wget || true
+      - echo "Installing terraform..."
+      - wget https://releases.hashicorp.com/terraform/1.13.2/terraform_1.13.2_linux_amd64.zip
+      - unzip terraform_1.13.2_linux_amd64.zip -d /usr/local/bin/
+      - terraform -version
+      - python3 --version
+      - echo "Installing Python dependencies..."
+      - pip3 install --upgrade pip
+      - pip3 install -r requirements.txt
+  
+  pre_build:
+    commands:
+      - echo "Running python unit tests...."
+      - pytest tests/ --junitxml=test-results/results.xml
+
+  
+  build:
+    commands:
+      - echo "Initializing terraform...."
+      - cd infra
+      - terraform init -input=false -upgrade
+      - echo "Running terraform validate....."
+      - terraform fmt -recursive
+      - terraform validate
+    
+  post_build:
+    commands:
+      - echo "Running terraform plan...."
+      - cd infra
+      - terraform plan -out=tfplan   # how and where to store this to show it later
+      - terraform apply -auto-approve -input=false
+
+artifacts:
+  files:
+    - '**/*'
+  discard-paths: no
+  exclude-files:
+    - '.terraform/**'

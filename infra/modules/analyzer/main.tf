@@ -130,6 +130,12 @@ resource "aws_lambda_function" "analyzer" {
     aws_iam_role_policy_attachment.analyzer_bedrock_access,
     aws_iam_role_policy_attachment.analyzer_dynamodb_access
   ]
+
+  environment {
+    variables = {
+      TABLE_NAME = var.table_name
+    }
+  }
 }
 
 

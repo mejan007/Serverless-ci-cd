@@ -1,0 +1,6 @@
+creator_name = "mejan"
+sender_email = "mejan.lamichhane15@gmail.com"
+receiver_email = "mejanlamichhane@lftechnology.com"
+table_name = "mejan-StockAnalysis"
+env = "dev"
+github_connection_arn = "arn:aws:codestar-connections:us-east-1:702865854817:connection/a77b76ca-5eac-4689-a208-88528eb31884"

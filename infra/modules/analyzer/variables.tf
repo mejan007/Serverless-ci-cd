@@ -45,3 +45,7 @@ variable "table_arn" {
 variable "event_rule_arn" {
   type = string
 }
+
+variable "table_name" {
+  type = string
+}

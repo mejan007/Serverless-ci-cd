@@ -1,6 +1,6 @@
 resource "aws_dynamodb_table" "stock_analysis" {
-  name         = "mejan-StockAnalysis"
-  billing_mode = "PAY_PER_REQUEST"
+  name         = var.table_name
+  billing_mode = var.billing_mode
   hash_key     = "analysis_id" # Single PK for run-level items
   attribute {
     name = "analysis_id"
