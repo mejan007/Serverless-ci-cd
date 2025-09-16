@@ -37,10 +37,10 @@ phases:
       - cd infra
       - terraform apply -auto-approve -input=false tfplan  # Applies the plan
 
-artifacts:
-  files:
-    - 'infra/tfplan'  # Include plan as artifact
-    - 'infra/modules/*/src/*.zip'  # Lambda ZIPs
-  discard-paths: no
-  exclude-files:
-    - '.terraform/**'
+# artifacts:
+#   files:
+#     - 'infra/tfplan'  # Include plan as artifact
+#     - 'infra/modules/*/src/*.zip'  # Lambda ZIPs
+#   discard-paths: no
+#   exclude-paths:
+#     - '.terraform/**'
