@@ -99,7 +99,8 @@ resource "aws_iam_role_policy" "codebuild_policy" {
           "cloudwatch:PutMetricAlarm",
           "cloudwatch:DeleteMetricAlarm",
           "cloudwatch:DescribeAlarmHistory",
-          "cloudwatch:PutMetricData"
+          "cloudwatch:PutMetricData",
+          "cloudwatch:ListTagsForResource"
         ]
         Resource = "*"
       }
