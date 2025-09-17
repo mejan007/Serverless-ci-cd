@@ -32,26 +32,39 @@ resource "aws_iam_role_policy" "codebuild_policy" {
         Action   = ["codebuild:*"]
         Resource = "*"
       },
+      # {
+      #   Effect = "Allow"
+      #   Action = [
+      #         "iam:GetRole",
+      #         "iam:PassRole",
+      #         "iam:CreateRole",
+      #         "iam:DeleteRole",
+      #         "iam:AttachRolePolicy",
+      #         "iam:DetachRolePolicy",
+      #         "iam:PutRolePolicy",
+      #         "iam:GetPolicy",
+      #         "iam:CreatePolicy",
+      #         "iam:DeletePolicy",
+      #         "iam:GetPolicyVersion",
+      #         "iam:ListPolicyVersions"
+      #   ]
+      #   Resource = [
+      #     "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/*",
+      #     "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/*"
+      #   ]
+      # }
       {
-        Effect = "Allow"
+        Effect = "Allow",
         Action = [
-              "iam:GetRole",
-              "iam:PassRole",
-              "iam:CreateRole",
-              "iam:DeleteRole",
-              "iam:AttachRolePolicy",
-              "iam:DetachRolePolicy",
-              "iam:PutRolePolicy",
-              "iam:GetPolicy",
-              "iam:CreatePolicy",
-              "iam:DeletePolicy",
-              "iam:GetPolicyVersion",
-              "iam:ListPolicyVersions"
-        ]
-        Resource = [
-          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/*",
-          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/*"
-        ]
+          "iam:GetRole",
+          "iam:GetPolicy",
+          "iam:ListRolePolicies",
+          "iam:GetRolePolicy",
+          "iam:ListAttachedRolePolicies",
+          "iam:GetPolicyVersion",
+          "iam:CreatePolicyVersion",   
+        ],
+        Resource = "*"
       }
     ]
   })
