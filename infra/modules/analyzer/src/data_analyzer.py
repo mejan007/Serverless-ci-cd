@@ -25,9 +25,9 @@ handler.setFormatter(JSONFormatter())
 logger.addHandler(handler)
 
 # AWS clients
-s3_client = boto3.client("s3")
-dynamodb = boto3.resource("dynamodb")
-bedrock = boto3.client("bedrock-runtime")
+
+
+# bedrock = boto3.client("bedrock-runtime")
 
 TABLE_NAME = os.environ["TABLE_NAME"]
 
@@ -134,6 +134,7 @@ def compute_aggregates(symbol_data):
 
 def call_bedrock(symbol_data, aggregates, correlation_id):
     """Call Bedrock for per-symbol analysis and comprehensive executive summary."""
+    bedrock = boto3.client("bedrock-runtime")
     try:
         prompt = (
             "You are an expert stock market analyst. Your task is to provide deep, actionable natural language analysis for each stock symbol based on the given metrics and recent OHLCV data. "
@@ -237,8 +238,68 @@ def call_bedrock(symbol_data, aggregates, correlation_id):
         raise
     return output
 
+# def store_analysis(run_id, output, symbol_data, event, correlation_id):
+#     """Store analysis and notification data in the same DynamoDB table."""
+#     dynamodb = boto3.resource("dynamodb")
+#     table = dynamodb.Table(TABLE_NAME)
+#     timestamp = datetime.datetime.utcnow().isoformat()
+
+#     # Log the raw event detail for debugging
+#     logger.info(f"Raw event detail: {event['detail']}", extra={"correlation_id": correlation_id})
+
+#     # Extract row counts from ingestor event
+#     if isinstance(event["detail"], (str, bytes, bytearray)):
+#         ingestor_detail = json.loads(event["detail"])
+#     else:
+#         ingestor_detail = event["detail"]  # Use as-is if already a dict
+#     valid_count = ingestor_detail.get("valid_count", 0)  # Processed count from ingestor
+#     invalid_count = ingestor_detail.get("invalid_count", 0)  # Rejected count from ingestor
+#     raw_count = valid_count + invalid_count  # Total input records
+
+#     # Extract key anomalies
+#     key_anomalies = {symbol: analysis["key_anomaly"] for symbol, analysis in output.get("symbols", {}).items() if analysis["key_anomaly"] != "None"}
+
+#     # Single item combining full analysis and notification data
+#     item = {
+#         "analysis_id": run_id,
+#         "symbols_analyzed": list(symbol_data.keys()),
+#         "insights": {
+#             symbol: {
+#                 **analysis,
+#                 "latest_close": str(symbol_data.get("metrics", {}).get("latest_close", "N/A")),
+#                 "trend": symbol_data.get("metrics", {}).get("trend", "unknown"),
+#                 "momentum": str(symbol_data.get("metrics", {}).get("momentum", None)) if symbol_data.get("metrics", {}).get("momentum") is not None else None,
+#                 "volatility": str(symbol_data.get("metrics", {}).get("volatility", 0.0)),
+#                 "anomalies": symbol_data.get("metrics", {}).get("anomalies", []),
+#                 "percent_change": str(symbol_data.get("metrics", {}).get("percent_change", 0.0))
+#             } for symbol, analysis in output.get("symbols", {}).items()
+#         },
+#         "aggregates": compute_aggregates(symbol_data),
+#         "executive_summary": output.get("executive_summary", "No comprehensive summary generated."),
+#         "key_anomalies": key_anomalies,
+#         "row_counts": {
+#             "raw": raw_count,
+#             "processed": valid_count,
+#             "rejected": invalid_count
+#         },
+#         "processed_at": timestamp,
+#         "correlation_id": correlation_id
+#     }
+#     try:
+#         table.put_item(Item=item)
+#         logger.info(f"Stored analysis and notification data: {run_id}", extra={"correlation_id": correlation_id})
+#     except Exception as e:
+#         logger.error(f"Error writing to DynamoDB: {str(e)}", extra={"correlation_id": correlation_id})
+#         raise
+
 def store_analysis(run_id, output, symbol_data, event, correlation_id):
     """Store analysis and notification data in the same DynamoDB table."""
+    # Lazy init: Create resource here, only when function is called
+    dynamodb = boto3.resource("dynamodb")
+    # Check for required env var (fail fast if missing in Lambda runtime)
+    if not TABLE_NAME:
+        raise ValueError("TABLE_NAME environment variable is required")
+    
     table = dynamodb.Table(TABLE_NAME)
     timestamp = datetime.datetime.utcnow().isoformat()
 
@@ -264,12 +325,12 @@ def store_analysis(run_id, output, symbol_data, event, correlation_id):
         "insights": {
             symbol: {
                 **analysis,
-                "latest_close": str(symbol_data.get("metrics", {}).get("latest_close", "N/A")),
-                "trend": symbol_data.get("metrics", {}).get("trend", "unknown"),
-                "momentum": str(symbol_data.get("metrics", {}).get("momentum", None)) if symbol_data.get("metrics", {}).get("momentum") is not None else None,
-                "volatility": str(symbol_data.get("metrics", {}).get("volatility", 0.0)),
-                "anomalies": symbol_data.get("metrics", {}).get("anomalies", []),
-                "percent_change": str(symbol_data.get("metrics", {}).get("percent_change", 0.0))
+                "latest_close": str(symbol_data[symbol]["metrics"].get("latest_close", "N/A")),  # Fixed: Use symbol_data[symbol] instead of .get("metrics")
+                "trend": symbol_data[symbol]["metrics"].get("trend", "unknown"),
+                "momentum": str(symbol_data[symbol]["metrics"].get("momentum", None)) if symbol_data[symbol]["metrics"].get("momentum") is not None else None,
+                "volatility": str(symbol_data[symbol]["metrics"].get("volatility", 0.0)),
+                "anomalies": symbol_data[symbol]["metrics"].get("anomalies", []),
+                "percent_change": str(symbol_data[symbol]["metrics"].get("percent_change", 0.0))
             } for symbol, analysis in output.get("symbols", {}).items()
         },
         "aggregates": compute_aggregates(symbol_data),
@@ -298,6 +359,9 @@ def lambda_handler(event, context):
     logger.info(f"Lambda invocation started, run_id={run_id}", extra={"correlation_id": correlation_id})
 
     try:
+        # Lazy init
+        s3_client = boto3.client("s3")
+
         # Extract bucket and key from EventBridge event triggered by ingestor
         bucket = event["detail"]["bucket"]["name"]
         key = event["detail"]["key"]

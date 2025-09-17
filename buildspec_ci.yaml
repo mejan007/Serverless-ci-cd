@@ -16,10 +16,10 @@ phases:
       - pip3 install --upgrade pip
       - pip3 install -r requirements.txt
   
-  # pre_build:
-  #   commands:
-  #     - echo "Running python unit tests...."
-  #     - pytest tests/ --junitxml=test-results/results.xml
+  pre_build:
+    commands:
+      - echo "Running python unit tests...."
+      - pytest tests/test_analyzer.py --junitxml=test-results/results.xml
 
   
   build:
