@@ -108,7 +108,7 @@ data "archive_file" "lambda_zip" {
 resource "aws_lambda_function" "analyzer" {
   function_name = "mejan-data-analyzer-lambda"
   role          = aws_iam_role.analyzer_lambda_role.arn
-  handler       = "data-analyzer.lambda_handler"
+  handler       = "data_analyzer.lambda_handler"
   runtime       = "python3.12"
 
   filename = data.archive_file.lambda_zip.output_path

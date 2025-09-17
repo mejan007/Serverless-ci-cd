@@ -115,7 +115,7 @@ data "archive_file" "lambda_zip" {
 resource "aws_lambda_function" "this" {
   function_name = var.function_name
   role          = aws_iam_role.lambda_role.arn
-  handler       = "data-ingestor.lambda_handler"
+  handler       = "data_ingestor.lambda_handler"
   runtime       = "python3.12"
 
   filename = data.archive_file.lambda_zip.output_path

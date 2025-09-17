@@ -112,7 +112,7 @@ data "archive_file" "lambda_zip" {
 resource "aws_lambda_function" "notifier" {
   function_name = "mejan-notifier-lambda"
   role          = aws_iam_role.notifier_lambda_role.arn
-  handler       = "notifier-lambda.handler"
+  handler       = "notifier_lambda.handler"
   runtime       = "python3.12"
 
   filename = data.archive_file.lambda_zip.output_path
