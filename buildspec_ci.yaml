@@ -33,9 +33,7 @@ phases:
 
 artifacts:
   files:
-    - 'infra/**/*'
+    - '**/*'
   discard-paths: no
   exclude-files:
-    - 'infra/**/__pycache__/*'
-    - 'infra/**/*.pyc'
-    - 'infra/.terraform/**'
+    - '.terraform/**'
