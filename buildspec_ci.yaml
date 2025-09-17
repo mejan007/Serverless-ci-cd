@@ -35,5 +35,10 @@ artifacts:
   files:
     - '**/*'
   discard-paths: no
-  exclude-files:
+  exclude-paths:
     - '.terraform/**'
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'
+    - 'infra/.terraform/**/**'

@@ -40,3 +40,8 @@ phases:
 #   discard-paths: no
 #   exclude-paths:
 #     - '.terraform/**'
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'
+    - 'infra/.terraform/**/*'
