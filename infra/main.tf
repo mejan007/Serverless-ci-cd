@@ -51,7 +51,7 @@ module "ingestor_function" {
 
   s3_bucket_arn = module.data_bucket.bucket_arn
 
-  region = data.aws_region.current.name
+  region = data.aws_region.current.id
 
   account_id = data.aws_caller_identity.current.account_id
 

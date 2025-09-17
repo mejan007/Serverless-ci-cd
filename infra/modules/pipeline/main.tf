@@ -29,6 +29,21 @@ resource "aws_iam_role_policy" "codebuild_policy" {
         Effect   = "Allow"
         Action   = ["codebuild:*"]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+              "iam:GetRole",
+              "iam:CreateRole",
+              "iam:DeleteRole",
+              "iam:AttachRolePolicy",
+              "iam:DetachRolePolicy",
+              "iam:PutRolePolicy",
+              "iam:GetPolicy",
+              "iam:CreatePolicy",
+              "iam:DeletePolicy"
+        ]
+        Resource = "*"
       }
     ]
   })

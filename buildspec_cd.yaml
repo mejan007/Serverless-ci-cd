@@ -16,9 +16,6 @@ phases:
       - pip3 install --upgrade pip
       - pip3 install -r requirements.txt  # If needed for Lambda ZIP build
 
-  pre_build:
-    commands:
-      - echo "No pre-build for CD"
 
   build:
     commands:
@@ -34,7 +31,6 @@ phases:
   post_build:
     commands:
       - echo "Applying Terraform..."
-      - cd infra
       - terraform apply -auto-approve -input=false tfplan  # Applies the plan
 
 # artifacts:
