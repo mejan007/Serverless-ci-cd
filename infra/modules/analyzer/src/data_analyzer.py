@@ -63,8 +63,12 @@ def compute_metrics(values):
             anomalies.append(f"Unusual trading volume on {dates[0] or 'unknown date'}")
         if latest_close and prev_close and abs(latest_close - prev_close) > 0.05 * prev_close:
             anomalies.append(f"Sharp price movement on {dates[0] or 'unknown date'}")
-        if len(closes) >= 5 and latest_close == max(closes[:5]):
-            anomalies.append(f"Record high close on {dates[0] or 'unknown date'}")
+        if len(closes) >= 5:
+            recent_closes = closes[:5]
+            avg_close = statistics.mean(recent_closes)
+            stdev_close = statistics.stdev(recent_closes) if len(set(recent_closes)) > 1 else 0
+            if stdev_close > 0 and latest_close > avg_close + 2 * stdev_close:
+                anomalies.append(f"Record high close on {dates[0] or 'unknown date'}")
         return {
             "latest_close": round(latest_close, 2) if latest_close is not None else None,
             "trend": trend,
