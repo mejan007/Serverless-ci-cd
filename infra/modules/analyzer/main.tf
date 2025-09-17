@@ -173,3 +173,36 @@ resource "aws_lambda_permission" "allow_eventbridge" {
   principal     = "events.amazonaws.com"
   source_arn    = var.event_rule_arn
 }
+
+
+resource "aws_cloudwatch_metric_alarm" "analyzer_errors" {
+  alarm_name          = "mejan-analyzer-lambda-errors"
+  alarm_description   = "Alarm when analyzer Lambda reports errors"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  dimensions = {
+    FunctionName = aws_lambda_function.analyzer.function_name
+  }
+  treat_missing_data = "notBreaching"
+}
+
+resource "aws_cloudwatch_metric_alarm" "bedrock_retry_exceeded" {
+  alarm_name          = "mejan-analyzer-bedrock-retry-exceeded"
+  alarm_description   = "Triggers when Bedrock retries exceed 5"
+  namespace           = "mejan-pipeline"
+  metric_name         = "BedrockRetryExceeded"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  dimensions = {
+    LambdaFunction = aws_lambda_function.analyzer.function_name
+  }
+  treat_missing_data = "notBreaching"
+}

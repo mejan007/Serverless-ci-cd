@@ -30,6 +30,36 @@ PROCESSED_PREFIX = 'processed/'
 REJECTS_PREFIX = 'rejects/'
 HASHES_PREFIX = 'processed/hashes/'
 
+cloudwatch = boto3.client("cloudwatch")
+
+def publish_reject_metric(valid_count, invalid_count, correlation_id=None):
+    total = valid_count + invalid_count
+    if total == 0:
+        # Nothing to publish
+        return
+    try:
+        reject_percentage = (invalid_count / total) * 100.0
+        cloudwatch.put_metric_data(
+            Namespace="mejan-pipeline",
+            MetricData=[
+                {
+                    "MetricName": "RejectedPercentage",
+                    "Dimensions": [
+                        {"Name": "LambdaFunction", "Value": os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "Ingestor")}
+                    ],
+                    "Unit": "Percent",
+                    "Value": reject_percentage
+                }
+            ]
+        )
+        logger.info(f"Published RejectedPercentage={reject_percentage:.2f}%", extra={'correlation_id': correlation_id})
+    except Exception as e:
+        # Never fail the whole Lambda because metric publishing failed
+        logger.error(f"Failed to publish reject metric: {str(e)}", extra={'correlation_id': correlation_id})
+
+
+
+
 def validate_record(symbol, record):
     """
     Validates a single stock record.
@@ -107,7 +137,7 @@ def process_stock_data(data, correlation_id):
         
         for value in symbol_data['values']:
             # Flatten: add symbol to each record
-            record = {**value, 'symbol': symbol}
+            record = {**value, 'symbol': symbol, 'interval': meta.get('interval','unknown')}
             is_valid, error = validate_record(symbol, record)
             
             if is_valid:
@@ -223,6 +253,11 @@ def lambda_handler(event, context):
         
         # Create marker file to indicate ETag was processed
         try:
+            publish_reject_metric(len(valid_records), len(invalid_records), correlation_id)
+        except Exception as e:
+            logger.error(f"Failed to publish reject metric: {str(e)}", extra={'correlation_id': correlation_id})
+
+        try:
             s3_client.put_object(
                 Bucket=bucket_name,
                 Key=hash_key,
@@ -250,7 +285,12 @@ def lambda_handler(event, context):
                             'DetailType': 'IngestorCompleted',
                             'Detail': json.dumps({
                                 'bucket': {'name': bucket_name},
-                                'key': processed_key
+                                'key': processed_key,
+                                'valid_count': len(valid_records),
+                                'invalid_count': len(invalid_records),
+                                'raw_count': len(valid_records) + len(invalid_records),
+                                'filename': filename,
+                                'processed_marker': hash_key
                             }),
                             'EventBusName': 'default'
                         }

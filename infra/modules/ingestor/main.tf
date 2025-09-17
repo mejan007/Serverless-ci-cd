@@ -138,3 +138,36 @@ resource "aws_lambda_function" "this" {
 }
 
 
+
+resource "aws_cloudwatch_metric_alarm" "ingestor_errors" {
+  alarm_name          = "mejan-ingestor-lambda-errors"
+  alarm_description   = "Alarm when ingestor Lambda reports errors"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  dimensions = {
+    FunctionName = aws_lambda_function.this.function_name
+  }
+  treat_missing_data = "notBreaching"
+}
+
+resource "aws_cloudwatch_metric_alarm" "ingestor_reject_rate" {
+  alarm_name          = "mejan-ingestor-rejected-percentage"
+  alarm_description   = "Triggers when rejected percentage from ingestor exceeds threshold"
+  namespace           = "mejan-pipeline"
+  metric_name         = "RejectedPercentage"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 10.0       # adjust threshold as needed (10%)
+  unit                = "Percent"
+  comparison_operator = "GreaterThanThreshold"
+  dimensions = {
+    LambdaFunction = aws_lambda_function.this.function_name
+  }
+  treat_missing_data = "notBreaching"
+}

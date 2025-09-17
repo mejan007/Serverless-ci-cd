@@ -142,4 +142,19 @@ resource "aws_lambda_function" "notifier" {
   }
 }
 
+resource "aws_cloudwatch_metric_alarm" "notifier_errors" {
+  alarm_name          = "mejan-notifier-lambda-errors"
+  alarm_description   = "Alarm when notifier Lambda reports errors"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  dimensions = {
+    FunctionName = aws_lambda_function.this.function_name
+  }
+  treat_missing_data = "notBreaching"
+}
 

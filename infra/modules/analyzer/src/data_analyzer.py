@@ -5,6 +5,7 @@ import datetime
 import uuid
 import statistics
 import os
+import time
 
 # Logging setup
 logger = logging.getLogger()
@@ -132,111 +133,136 @@ def compute_aggregates(symbol_data):
 
     return aggregates
 
-def call_bedrock(symbol_data, aggregates, correlation_id):
+def call_bedrock(symbol_data, aggregates, correlation_id, context):
     """Call Bedrock for per-symbol analysis and comprehensive executive summary."""
     bedrock = boto3.client("bedrock-runtime")
-    try:
-        prompt = (
-            "You are an expert stock market analyst. Your task is to provide deep, actionable natural language analysis for each stock symbol based on the given metrics and recent OHLCV data. "
-            "Focus on synthesizing patterns, implications, and trader-relevant narratives—do not simply restate or copy the raw data, metrics, or anomalies. Instead, interpret them to create original insights.\n\n"
-            "Output a valid JSON object with:\n"
-            "- A top-level 'executive_summary': A detailed 3-5 sentence paragraph (150-250 words) consolidating the full analysis. Synthesize overall market sentiment from trends and aggregates, highlight standout symbols (e.g., top gainers/losers, anomalies), weave in key opportunities and risks across all symbols, and provide actionable trading implications. Reference aggregates explicitly for context (e.g., 'with average volume at X M shares'). Make it cohesive, high-level, and executive-ready—cover bullish/bearish signals, turbulence levels, and strategic recommendations.\n"
-            "- 'symbols': a dictionary where each key is a stock symbol and the value is an object with:\n"
-            "  - 'summary': 2-3 sentences analyzing the stock's recent behavior, such as evolving trends, volume implications, or event impacts. Infer broader context (e.g., 'This surge aligns with sector momentum'). Reference key dates/values sparingly and only to support analysis.\n"
-            "  - 'opportunities': 1-2 sentences outlining specific trading strategies or entry/exit points derived from the data patterns (e.g., 'Consider scaling in above $X if volume holds'). Avoid generic advice.\n"
-            "  - 'risks': 1-2 sentences detailing potential downside scenarios tied to the data (e.g., 'A failure to hold $Y could trigger a 5% pullback'). Avoid generic warnings.\n"
-            "  - 'key_anomaly': A single sentence flagging the most critical anomaly (if any) and its trading implication, or 'None' if no significant anomalies.\n\n"
-            "Guidelines:\n"
-            "- Synthesize: Connect metrics (e.g., high volatility + uptrend = 'volatile breakout potential') without quoting numbers verbatim.\n"
-            "- Trader-focused: Emphasize implications for positions, not just descriptions.\n"
-            "- Original: Do not copy prompt data or use example-like phrasing; create fresh analysis per symbol.\n"
-            "- Concise yet insightful: Use simple language, but demonstrate expertise through pattern recognition.\n"
-            "- For executive_summary: Ensure it's comprehensive—integrate insights from ALL symbols and aggregates into a unified narrative, not a bullet list or one-liner.\n"
-            "- JSON only: Return solely the JSON in ```json ... ``` format. No extra text.\n\n"
-            "Structure example (interpret, don't copy):\n"
-            "```json\n"
-            "{\n"
-            "  \"executive_summary\": \"The market demonstrated resilient bullish undertones despite pockets of volatility, with four out of six major tech stocks maintaining upward trajectories amid moderate turbulence from two anomalous performers. TSLA's explosive momentum led the pack as the top gainer with a 12.85% surge, signaling strong sector confidence, while GOOG's record high underscores sustained innovation-driven gains; however, AAPL and AMZN's downtrends highlight earnings-related caution in consumer tech. Aggregates reveal average trading volume of 219.01M shares across the portfolio, with TSLA's elevated volatility (stddev 26.69) offering high-reward opportunities but demanding tight risk management—traders should prioritize momentum plays in uptrending names like MSFT and META, scaling in on dips while setting stops below recent supports to navigate potential reversals in anomalous stocks.\",\n"
-            "  \"symbols\": {\n"
-            "    \"AAPL\": {\n"
-            "      \"summary\": \"The stock's recent decline suggests investor caution ahead of earnings, with a notable drop in volume indicating a lack of conviction in the current downtrend.\",\n"
-            "      \"opportunities\": \"Consider a short-term bounce if broader market indices stabilize, targeting a quick 2% upside.\",\n"
-            "      \"risks\": \"A continued drop below recent lows could signal deeper sector-wide issues.\",\n"
-            "      \"key_anomaly\": \"None\"\n"
-            "    }\n"
-            "  }\n"
-            "}\n"
-            "```\n\n"
-            "Aggregates for context (use in executive_summary):\n"
-            f"{chr(10).join(aggregates)}\n\n"
-            "Analyze these symbols:\n"
-        )
-        for symbol, data in symbol_data.items():
-            if "metrics" not in data:
-                logger.warning(f"Missing metrics for symbol {symbol}", extra={"correlation_id": correlation_id})
-                continue
-            metrics = data["metrics"]
-            recent_values = sorted(data["values"], key=lambda x: x["datetime"], reverse=True)[:5]
-            prompt += f"--- {symbol} ---\n"
-            prompt += f"Trend direction: {metrics['trend']}\n"
-            prompt += f"Momentum over last 5 days: {metrics['momentum'] if metrics['momentum'] is not None else 'Insufficient data'}\n"
-            prompt += f"Volatility level: {metrics['volatility']:.2f}\n"
-            prompt += f"Recent percent change: {metrics['percent_change']:.2f}%\n"
-            prompt += f"Detected anomalies: {', '.join(metrics['anomalies']) if metrics['anomalies'] else 'None'}\n"
-            prompt += "Recent price action patterns (last 5 days): Steady climb, sudden drop, etc.—infer from closes: " + ", ".join([f"{float(v['close']):.2f} ({v['datetime'][:10]})" for v in recent_values]) + "\n"
-            prompt += f"Volume context: Latest vs average—{int(recent_values[0]['volume'])/1e6:.2f}M vs {metrics['avg_volume']/1e6:.2f}M avg\n\n"
-
-        prompt += (
-            "Generate original, comprehensive analysis. "
-            "The executive_summary must consolidate ALL symbol insights with aggregates into a detailed, flowing paragraph (150-250 words). "
-            "Output only the JSON."
-        )
-
-        response = bedrock.converse(
-            modelId="amazon.nova-lite-v1:0",
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": 3000, "temperature": 0.3}
-        )
-        output_text = response["output"]["message"]["content"][0]["text"].strip()
-        if output_text.startswith("```json\n"):
-            output_text = output_text[7:-3].strip()
-        
+    cloudwatch = boto3.client('cloudwatch')
+    retry_count = 0
+    delay = 1 # Initial delay in seconds for exponential backoff
+    max_retries = 5
+    while retry_count < max_retries:
         try:
+            prompt = (
+                "You are an expert stock market analyst. Your task is to provide deep, actionable natural language analysis for each stock symbol based on the given metrics and recent OHLCV data. "
+                "Focus on synthesizing patterns, implications, and trader-relevant narratives—do not simply restate or copy the raw data, metrics, or anomalies. Instead, interpret them to create original insights.\n\n"
+                "Output a valid JSON object with:\n"
+                "- A top-level 'executive_summary': A detailed 3-5 sentence paragraph (150-250 words) consolidating the full analysis. Synthesize overall market sentiment from trends and aggregates, highlight standout symbols (e.g., top gainers/losers, anomalies), weave in key opportunities and risks across all symbols, and provide actionable trading implications. Reference aggregates explicitly for context (e.g., 'with average volume at X M shares'). Make it cohesive, high-level, and executive-ready—cover bullish/bearish signals, turbulence levels, and strategic recommendations.\n"
+                "- 'symbols': a dictionary where each key is a stock symbol and the value is an object with:\n"
+                "  - 'summary': 2-3 sentences analyzing the stock's recent behavior, such as evolving trends, volume implications, or event impacts. Infer broader context (e.g., 'This surge aligns with sector momentum'). Reference key dates/values sparingly and only to support analysis.\n"
+                "  - 'opportunities': 1-2 sentences outlining specific trading strategies or entry/exit points derived from the data patterns (e.g., 'Consider scaling in above $X if volume holds'). Avoid generic advice.\n"
+                "  - 'risks': 1-2 sentences detailing potential downside scenarios tied to the data (e.g., 'A failure to hold $Y could trigger a 5% pullback'). Avoid generic warnings.\n"
+                "  - 'key_anomaly': A single sentence flagging the most critical anomaly (if any) and its trading implication, or 'None' if no significant anomalies.\n\n"
+                "Guidelines:\n"
+                "- Synthesize: Connect metrics (e.g., high volatility + uptrend = 'volatile breakout potential') without quoting numbers verbatim.\n"
+                "- Trader-focused: Emphasize implications for positions, not just descriptions.\n"
+                "- Original: Do not copy prompt data or use example-like phrasing; create fresh analysis per symbol.\n"
+                "- Concise yet insightful: Use simple language, but demonstrate expertise through pattern recognition.\n"
+                "- For executive_summary: Ensure it's comprehensive—integrate insights from ALL symbols and aggregates into a unified narrative, not a bullet list or one-liner.\n"
+                "- JSON only: Return solely the JSON in ```json ... ``` format. No extra text.\n\n"
+                "Structure example (interpret, don't copy):\n"
+                "```json\n"
+                "{\n"
+                "  \"executive_summary\": \"The market demonstrated resilient bullish undertones despite pockets of volatility, with four out of six major tech stocks maintaining upward trajectories amid moderate turbulence from two anomalous performers. TSLA's explosive momentum led the pack as the top gainer with a 12.85% surge, signaling strong sector confidence, while GOOG's record high underscores sustained innovation-driven gains; however, AAPL and AMZN's downtrends highlight earnings-related caution in consumer tech. Aggregates reveal average trading volume of 219.01M shares across the portfolio, with TSLA's elevated volatility (stddev 26.69) offering high-reward opportunities but demanding tight risk management—traders should prioritize momentum plays in uptrending names like MSFT and META, scaling in on dips while setting stops below recent supports to navigate potential reversals in anomalous stocks.\",\n"
+                "  \"symbols\": {\n"
+                "    \"AAPL\": {\n"
+                "      \"summary\": \"The stock's recent decline suggests investor caution ahead of earnings, with a notable drop in volume indicating a lack of conviction in the current downtrend.\",\n"
+                "      \"opportunities\": \"Consider a short-term bounce if broader market indices stabilize, targeting a quick 2% upside.\",\n"
+                "      \"risks\": \"A continued drop below recent lows could signal deeper sector-wide issues.\",\n"
+                "      \"key_anomaly\": \"None\"\n"
+                "    }\n"
+                "  }\n"
+                "}\n"
+                "```\n\n"
+                "Aggregates for context (use in executive_summary):\n"
+                f"{chr(10).join(aggregates)}\n\n"
+                "Analyze these symbols:\n"
+            )
+            for symbol, data in symbol_data.items():
+                if "metrics" not in data:
+                    logger.warning(f"Missing metrics for symbol {symbol}", extra={"correlation_id": correlation_id})
+                    continue
+                metrics = data["metrics"]
+                interval = data.get("interval", "unknown")
+                all_values = sorted(data["values"], key=lambda x: x["datetime"], reverse=True)
+
+                if len(all_values) > 50:
+                    all_values = all_values[:52]
+                    logger.warning(f"Truncated {symbol} values to 52 points for prompt limit", extra={"correlation_id": correlation_id})
+
+                prompt += f"--- {symbol} ({interval} interval) ---\n"
+                prompt += f"Metrics (based on all available {interval} data):\n"
+                prompt += f"  Trend direction: {metrics['trend']}\n"
+                prompt += f"  Momentum over last 5 {interval} periods: {metrics['momentum'] if metrics['momentum'] is not None else 'Insufficient data'}\n"
+                prompt += f"  Volatility (stddev of last 5 {interval} periods): {metrics['volatility']:.2f}\n"
+                prompt += f"  Recent percent change: {metrics['percent_change']:.2f}%\n"
+                prompt += f"  Average volume: {metrics['avg_volume']/1e6:.2f}M shares\n"
+                prompt += f"  Detected anomalies: {', '.join(metrics['anomalies']) if metrics['anomalies'] else 'None'}\n"
+                prompt += f"Full {interval} OHLCV data points (all available, sorted newest first):\n"
+                prompt += ", ".join([
+                    f"{v['datetime'][:10]}: O${float(v.get('open', 0)):.2f}/H${float(v.get('high', 0)):.2f}/L${float(v.get('low', 0)):.2f}/C${float(v.get('close', 0)):.2f} (vol {int(v.get('volume', 0))/1e6:.2f}M)"
+                    for v in all_values
+                ]) + "\n\n"
+            prompt += (
+                "Generate original, comprehensive analysis. "
+                "The executive_summary must consolidate ALL symbol insights with aggregates into a detailed, flowing paragraph (150-250 words). "
+                "Output only the JSON."
+            )
+
+            response = bedrock.converse(
+                modelId="amazon.nova-lite-v1:0",
+                messages=[{"role": "user", "content": [{"text": prompt}]}],
+                inferenceConfig={"maxTokens": 3000, "temperature": 0.3}
+            )
+            output_text = response["output"]["message"]["content"][0]["text"].strip()
+            if output_text.startswith("```json\n"):
+                output_text = output_text[7:-3].strip()
+            
             output = json.loads(output_text)
-            # Validate structure
-            if "executive_summary" not in output:
-                raise ValueError("Missing 'executive_summary' in output")
-            if "symbols" not in output or not isinstance(output["symbols"], dict):
-                raise ValueError("Invalid JSON structure: Missing 'symbols' key or not a dict")
-            for symbol in output["symbols"]:
-                if symbol not in symbol_data:
-                    raise ValueError(f"Unexpected symbol {symbol} in output")
-                sym_out = output["symbols"][symbol]
-                required_keys = ["summary", "opportunities", "risks", "key_anomaly"]
-                if not all(k in sym_out for k in required_keys):
-                    raise ValueError(f"Missing required keys in {symbol}: {required_keys}")
             logger.info(f"Bedrock analysis completed successfully", extra={"correlation_id": correlation_id})
+            return output
+            # try:
+            #     output = json.loads(output_text)
+            #     # Validate structure
+            #     if "executive_summary" not in output:
+            #         raise ValueError("Missing 'executive_summary' in output")
+            #     if "symbols" not in output or not isinstance(output["symbols"], dict):
+            #         raise ValueError("Invalid JSON structure: Missing 'symbols' key or not a dict")
+            #     for symbol in output["symbols"]:
+            #         if symbol not in symbol_data:
+            #             raise ValueError(f"Unexpected symbol {symbol} in output")
+            #         sym_out = output["symbols"][symbol]
+            #         required_keys = ["summary", "opportunities", "risks", "key_anomaly"]
+            #         if not all(k in sym_out for k in required_keys):
+            #             raise ValueError(f"Missing required keys in {symbol}: {required_keys}")
+            #     logger.info(f"Bedrock analysis completed successfully", extra={"correlation_id": correlation_id})
         except json.JSONDecodeError as e:
-            logger.error(f"JSONDecodeError parsing Bedrock output: {str(e)}. Raw output: {output_text[:500]}...", extra={"correlation_id": correlation_id})
-            # Fallback: Generate minimal analytical placeholders
-            output = {
-                "executive_summary": "Market analysis indicates mixed sentiment with opportunities in volatile sectors; monitor for reversals based on aggregates showing moderate turbulence.",
-                "symbols": {
-                    symbol: {
-                        "summary": f"Analysis for {symbol} indicates {data.get('metrics', {}).get('trend', 'unknown')} trend with {len(data.get('metrics', {}).get('anomalies', []))} anomalies.",
-                        "opportunities": f"Monitor {symbol} for {data.get('metrics', {}).get('trend', 'unknown')} continuation opportunities.",
-                        "risks": f"Be cautious of volatility in {symbol} at {data.get('metrics', {}).get('volatility', 0.0)}.",
-                        "key_anomaly": data.get('metrics', {}).get('anomalies', [])[0] if data.get('metrics', {}).get('anomalies', []) else "None"
-                    } for symbol, data in symbol_data.items()
-                }
-            }
-        except ValueError as e:
-            logger.error(f"Validation error in Bedrock output: {str(e)}. Raw output: {output_text[:500]}...", extra={"correlation_id": correlation_id})
-            raise
-    except Exception as e:
-        logger.error(f"Error calling Bedrock: {str(e)}", extra={"correlation_id": correlation_id})
-        raise
-    return output
+                logger.error(f"JSONDecodeError parsing Bedrock output: {str(e)}. Raw output: {output_text[:500]}...", extra={"correlation_id": correlation_id})
+                # Fallback: Generate minimal analytical placeholders
+                raise
+            # except ValueError as e:
+            #     logger.error(f"Validation error in Bedrock output: {str(e)}. Raw output: {output_text[:500]}...", extra={"correlation_id": correlation_id})
+            #     raise
+        except Exception as e:
+            retry_count += 1
+            if retry_count > max_retries:
+                logger.error(f"Bedrock call failed after {max_retries} retries: {str(e)}", extra={"correlation_id": correlation_id})
+                cloudwatch.put_metric_data(
+                    Namespace="mejan-pipeline",
+                    MetricData=[
+                        {
+                            "MetricName": "BedrockRetryExceeded",
+                            "Dimensions": [
+                                {"Name": "LambdaFunction", "Value": context.function_name}
+                            ],
+                            "Value": 1.0,
+                            "Unit": "Count"
+                        }
+                    ]
+                )
+                raise
+            logger.warning(f"Bedrock call failed (attempt {retry_count}/{max_retries}): {str(e)}. Retrying in {delay} seconds...", extra={"correlation_id": correlation_id})
+            time.sleep(delay)
+            delay *= 2  # Exponential backoff
 
 # def store_analysis(run_id, output, symbol_data, event, correlation_id):
 #     """Store analysis and notification data in the same DynamoDB table."""
@@ -374,7 +400,7 @@ def lambda_handler(event, context):
         for record in records:
             symbol = record.get("symbol", "unknown")
             if symbol not in symbol_data:
-                symbol_data[symbol] = {"values": []}
+                symbol_data[symbol] = {"values": [], "interval": record.get("interval", "unknown")}
             symbol_data[symbol]["values"].append(record)
         for symbol in symbol_data:
             try:
@@ -386,7 +412,7 @@ def lambda_handler(event, context):
         # Compute aggregates early for Bedrock prompt
         aggregates = compute_aggregates(symbol_data)
 
-        output = call_bedrock(symbol_data, aggregates, correlation_id)
+        output = call_bedrock(symbol_data, aggregates, correlation_id, context)
         store_analysis(run_id, output, symbol_data, event, correlation_id)
 
         return {"statusCode": 200, "body": json.dumps({"correlation_id": correlation_id, "run_id": run_id})}
