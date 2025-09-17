@@ -153,7 +153,7 @@ resource "aws_cloudwatch_metric_alarm" "notifier_errors" {
   threshold           = 1
   comparison_operator = "GreaterThanOrEqualToThreshold"
   dimensions = {
-    FunctionName = aws_lambda_function.this.function_name
+    FunctionName = aws_lambda_function.notifier.function_name
   }
   treat_missing_data = "notBreaching"
 }
