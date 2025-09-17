@@ -103,8 +103,8 @@ resource "aws_iam_role_policy_attachment" "ses_attach" {
 
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_file = "${path.module}/src/notifier-lambda.py"
-  output_path = "${path.module}/src/notifier-lambda.zip"
+  source_file = "${path.module}/src/notifier_lambda.py"
+  output_path = "${path.module}/src/notifier_lambda.zip"
 }
 
 # Now we add the lambda function but for that we need the source code for the Lambda function.

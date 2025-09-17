@@ -34,6 +34,7 @@ resource "aws_iam_role_policy" "codebuild_policy" {
         Effect = "Allow"
         Action = [
               "iam:GetRole",
+              "iam:PassRole",
               "iam:CreateRole",
               "iam:DeleteRole",
               "iam:AttachRolePolicy",
@@ -41,9 +42,14 @@ resource "aws_iam_role_policy" "codebuild_policy" {
               "iam:PutRolePolicy",
               "iam:GetPolicy",
               "iam:CreatePolicy",
-              "iam:DeletePolicy"
+              "iam:DeletePolicy",
+              "iam:GetPolicyVersion",
+              "iam:ListPolicyVersions"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/*",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/*"
+        ]
       }
     ]
   })

@@ -99,8 +99,8 @@ resource "aws_iam_role_policy_attachment" "analyzer_dynamodb_access" {
 
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_file = "${path.module}/src/data-analyzer.py"
-  output_path = "${path.module}/src/data-analyzer.zip"
+  source_file = "${path.module}/src/data_analyzer.py"
+  output_path = "${path.module}/src/data_analyzer.zip"
 }
 
 # Now we add the lambda function but for that we need the source code for the Lambda function.

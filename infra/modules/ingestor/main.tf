@@ -106,8 +106,8 @@ resource "aws_iam_role_policy_attachment" "eventbridge_access" {
 
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_file = "${path.module}/src/data-ingestor.py"
-  output_path = "${path.module}/src/data-ingestor.zip"
+  source_file = "${path.module}/src/data_ingestor.py"
+  output_path = "${path.module}/src/data_ingestor.zip"
 }
 
 # Now we add the lambda function but for that we need the source code for the Lambda function.
