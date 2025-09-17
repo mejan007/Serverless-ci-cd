@@ -2,6 +2,8 @@ resource "aws_s3_bucket" "pipeline_artifacts" {
   bucket = "mejan-pipeline-artifacts"
 }
 
+data "aws_caller_identity" "current" {}
+
 
 resource "aws_iam_role" "codebuild_role" {
   name = "mejan-codebuild-role"
