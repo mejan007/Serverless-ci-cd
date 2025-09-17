@@ -29,7 +29,7 @@ logger.addHandler(handler)
 
 # bedrock = boto3.client("bedrock-runtime")
 
-TABLE_NAME = os.environ["TABLE_NAME"]
+TABLE_NAME = os.getenv("TABLE_NAME")
 
 def compute_metrics(values):
     """Compute key metrics from OHLCV data."""
