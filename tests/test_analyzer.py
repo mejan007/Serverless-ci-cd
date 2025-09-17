@@ -19,6 +19,7 @@ def test_compute_metrics_uptrend():
     assert metrics["volatility"] > 0
     # Percent change should be positive
     assert metrics["percent_change"] > 0
+    assert metrics["anomalies"] == [] 
 
 
 def test_compute_metrics_empty_data():
