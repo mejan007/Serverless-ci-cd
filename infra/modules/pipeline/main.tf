@@ -91,6 +91,17 @@ resource "aws_iam_role_policy" "codebuild_policy" {
         Resource = [
           "arn:aws:codepipeline:us-east-1:702865854817:mejan-pipeline"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:DescribeAlarms",
+          "cloudwatch:PutMetricAlarm",
+          "cloudwatch:DeleteMetricAlarm",
+          "cloudwatch:DescribeAlarmHistory",
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
       }
     ]
   })
