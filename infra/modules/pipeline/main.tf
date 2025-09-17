@@ -65,6 +65,19 @@ resource "aws_iam_role_policy" "codebuild_policy" {
           "iam:CreatePolicyVersion",   
         ],
         Resource = "*"
+      },
+      {
+      Effect = "Allow"
+        Action = [
+          "codepipeline:GetPipeline",
+          "codepipeline:UpdatePipeline",
+          "codepipeline:StartPipelineExecution",
+          "codepipeline:GetPipelineState",
+          "codepipeline:ListPipelineExecutions"
+        ]
+        Resource = [
+          "arn:aws:codepipeline:us-east-1:702865854817:mejan-pipeline"
+        ]
       }
     ]
   })
