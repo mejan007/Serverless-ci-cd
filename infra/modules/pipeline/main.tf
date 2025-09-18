@@ -118,7 +118,7 @@ resource "aws_iam_role_policy" "codebuild_policy" {
           "sns:Unsubscribe",
           "sns: GetSubscriptionAttributes"
         ]
-        Resource = "arn:aws:sns:us-east-1:702865854817:mejan-pipeline-alarms"
+        Resource = "*"
       }
     ]
   })

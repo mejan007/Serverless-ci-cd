@@ -2,11 +2,13 @@
 
 What is Serverless?
 
-
+---
 
 # Architecture
 
 ![alt text](img/architecture.png)
+
+---
 
 # Setup Guide
 
@@ -104,6 +106,7 @@ RAW_BUCKET=your_bucket_name_here
 python3 upload.py
 ```
 
+---
 
 ## Data Ingestion
 
@@ -448,6 +451,58 @@ The Git back sync addresses branch divergence by automatically syncing UAT chang
 The workflow checks for unmerged commits between development and UAT branches using **Git revision counting**. When differences are detected, it automatically creates a pull request from UAT to development using GitHub CLI and a Personal Access Token.
 
 This approach maintains visibility through manual PR review while automating the detection process.
+
+
+---
+
+# Structured Logging
+
+I implemented structured logging for lambda functions using which can be viewed in cloudwatch logs as well.
+
+```python
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        log_entry = {
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "correlation_id": getattr(record, "correlation_id", None),
+        }
+        return json.dumps(log_entry)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+handler.setFormatter(JSONFormatter())
+logger.addHandler(handler)
+
+```
+
+
+---
+
+
+# Screenshots
+
+## S3 bucket
+
+## Logs
+
+
+
+![alt text](image-2.png)
+
+## Alarms
+
+
+## CI-CD Pipeline
+
+## Analysis report
+![alt text](image.png)
+
+## Git-back sync
+
+![alt text](image-1.png)
 
 
 
