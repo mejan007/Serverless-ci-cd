@@ -1,3 +1,4 @@
+
 # Serverless Architecture Deployment
 This assignment implements a serverless data pipeline using AWS Lambda functions that execute code without managing servers. The three Lambda functions (Ingestor, Analyzer, Notifier) run only when triggered by events.
 
