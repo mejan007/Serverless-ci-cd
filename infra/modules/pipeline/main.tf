@@ -116,7 +116,7 @@ resource "aws_iam_role_policy" "codebuild_policy" {
           "sns:ListTagsForResource",
           "sns:Subscribe",
           "sns:Unsubscribe",
-          "sns: GetSubscriptionAttributes"
+          "sns:GetSubscriptionAttributes"
         ]
         Resource = "*"
       }

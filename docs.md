@@ -457,8 +457,6 @@ This approach maintains visibility through manual PR review while automating the
 
 # Structured Logging
 
-I implemented structured logging for lambda functions using which can be viewed in cloudwatch logs as well.
-
 ```python
 class JSONFormatter(logging.Formatter):
     def format(self, record):
@@ -478,6 +476,9 @@ logger.addHandler(handler)
 
 ```
 
+The pipeline implements structured JSON logging across all Lambda functions to enable efficient log analysis and debugging in CloudWatch. 
+
+The `JSONFormatter` class converts Python log records into structured JSON format with consistent fields including timestamp, log level, message, and correlation ID. Each log entry becomes a parseable JSON object rather than free-form text, enabling CloudWatch Insights queries and automated log processing. The correlation ID field provides end-to-end traceability across the entire pipeline
 
 ---
 
@@ -488,14 +489,14 @@ logger.addHandler(handler)
 
 ## Logs
 
-
-
 ![alt text](image-2.png)
 
 ## Alarms
-
+![alt text](image-4.png)
 
 ## CI-CD Pipeline
+
+![alt text](image-3.png)
 
 ## Analysis report
 ![alt text](image.png)
