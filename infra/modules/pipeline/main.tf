@@ -115,7 +115,8 @@ resource "aws_iam_role_policy" "codebuild_policy" {
           "sns:TagResource",
           "sns:ListTagsForResource",
           "sns:Subscribe",
-          "sns:Unsubscribe"
+          "sns:Unsubscribe",
+          "sns: GetSubscriptionAttribute"
         ]
         Resource = "arn:aws:sns:us-east-1:702865854817:mejan-pipeline-alarms"
       }
