@@ -322,40 +322,128 @@ def call_bedrock(symbol_data, aggregates, correlation_id, context):
 #         logger.error(f"Error writing to DynamoDB: {str(e)}", extra={"correlation_id": correlation_id})
 #         raise
 
+# def store_analysis(run_id, output, symbol_data, event, correlation_id):
+#     """Store analysis and notification data in the same DynamoDB table."""
+#     # Lazy init: Create resource here, only when function is called
+#     dynamodb = boto3.resource("dynamodb")
+#     # Check for required env var (fail fast if missing in Lambda runtime)
+#     if not TABLE_NAME:
+#         raise ValueError("TABLE_NAME environment variable is required")
+    
+#     table = dynamodb.Table(TABLE_NAME)
+#     timestamp = datetime.datetime.utcnow().isoformat()
+
+#     # Log the raw event detail for debugging
+#     logger.info(f"Raw event detail: {event['detail']}", extra={"correlation_id": correlation_id})
+
+#     # Extract row counts from ingestor event
+#     if isinstance(event["detail"], (str, bytes, bytearray)):
+#         ingestor_detail = json.loads(event["detail"])
+#     else:
+#         ingestor_detail = event["detail"]  # Use as-is if already a dict
+#     valid_count = ingestor_detail.get("valid_count", 0)  # Processed count from ingestor
+#     invalid_count = ingestor_detail.get("invalid_count", 0)  # Rejected count from ingestor
+#     raw_count = valid_count + invalid_count  # Total input records
+
+#     # Extract key anomalies
+#     key_anomalies = {symbol: analysis["key_anomaly"] for symbol, analysis in output.get("symbols", {}).items() if analysis["key_anomaly"] != "None"}
+
+#     # Single item combining full analysis and notification data
+#     item = {
+#         "analysis_id": run_id,
+#         "symbols_analyzed": list(symbol_data.keys()),
+#         "insights": {
+#             symbol: {
+#                 **analysis,
+#                 "latest_close": str(symbol_data[symbol]["metrics"].get("latest_close", "N/A")),  # Fixed: Use symbol_data[symbol] instead of .get("metrics")
+#                 "trend": symbol_data[symbol]["metrics"].get("trend", "unknown"),
+#                 "momentum": str(symbol_data[symbol]["metrics"].get("momentum", None)) if symbol_data[symbol]["metrics"].get("momentum") is not None else None,
+#                 "volatility": str(symbol_data[symbol]["metrics"].get("volatility", 0.0)),
+#                 "anomalies": symbol_data[symbol]["metrics"].get("anomalies", []),
+#                 "percent_change": str(symbol_data[symbol]["metrics"].get("percent_change", 0.0))
+#             } for symbol, analysis in output.get("symbols", {}).items()
+#         },
+#         "aggregates": compute_aggregates(symbol_data),
+#         "executive_summary": output.get("executive_summary", "No comprehensive summary generated."),
+#         "key_anomalies": key_anomalies,
+#         "row_counts": {
+#             "raw": raw_count,
+#             "processed": valid_count,
+#             "rejected": invalid_count
+#         },
+#         "processed_at": timestamp,
+#         "correlation_id": correlation_id
+#     }
+#     try:
+#         table.put_item(Item=item)
+#         logger.info(f"Stored analysis and notification data: {run_id}", extra={"correlation_id": correlation_id})
+#     except Exception as e:
+#         logger.error(f"Error writing to DynamoDB: {str(e)}", extra={"correlation_id": correlation_id})
+#         raise
+
+
 def store_analysis(run_id, output, symbol_data, event, correlation_id):
     """Store analysis and notification data in the same DynamoDB table."""
-    # Lazy init: Create resource here, only when function is called
     dynamodb = boto3.resource("dynamodb")
-    # Check for required env var (fail fast if missing in Lambda runtime)
     if not TABLE_NAME:
         raise ValueError("TABLE_NAME environment variable is required")
     
     table = dynamodb.Table(TABLE_NAME)
     timestamp = datetime.datetime.utcnow().isoformat()
 
-    # Log the raw event detail for debugging
-    logger.info(f"Raw event detail: {event['detail']}", extra={"correlation_id": correlation_id})
+    # Log full event for debugging
+    logger.info(f"Raw event: {json.dumps(event, default=str)}", extra={"correlation_id": correlation_id})
 
-    # Extract row counts from ingestor event
-    if isinstance(event["detail"], (str, bytes, bytearray)):
-        ingestor_detail = json.loads(event["detail"])
-    else:
-        ingestor_detail = event["detail"]  # Use as-is if already a dict
-    valid_count = ingestor_detail.get("valid_count", 0)  # Processed count from ingestor
-    invalid_count = ingestor_detail.get("invalid_count", 0)  # Rejected count from ingestor
-    raw_count = valid_count + invalid_count  # Total input records
+    try:
+        # Try lowercase 'detail' first, then uppercase 'Detail'
+        detail = event.get("detail") or event.get("Detail")
+        if not detail:
+            raise ValueError("No 'detail' or 'Detail' field in event")
+        
+        if isinstance(detail, (str, bytes, bytearray)):
+            ingestor_detail = json.loads(detail)
+        else:
+            ingestor_detail = detail
+        
+        logger.info(f"Parsed ingestor_detail: {json.dumps(ingestor_detail, default=str)}", extra={"correlation_id": correlation_id})
+        
+        valid_count = int(ingestor_detail.get("valid_count", 0)) if str(ingestor_detail.get("valid_count", 0)).isdigit() else 0
+        invalid_count = int(ingestor_detail.get("invalid_count", 0)) if str(ingestor_detail.get("invalid_count", 0)).isdigit() else 0
+        raw_count = valid_count + invalid_count
 
-    # Extract key anomalies
+        # Fallback: Count records from S3 if counts are 0
+        if valid_count == 0 and invalid_count == 0:
+            try:
+                s3_client = boto3.client("s3")
+                bucket = ingestor_detail.get("bucket", {}).get("name")
+                key = ingestor_detail.get("key")
+                if bucket and key:
+                    obj = s3_client.get_object(Bucket=bucket, Key=key)
+                    records = [json.loads(line) for line in obj["Body"].read().decode("utf-8").splitlines()]
+                    # Simplified fallback: assume all records are valid
+                    valid_count = len(records)
+                    invalid_count = 0
+                    raw_count = valid_count
+                    logger.info(f"Fallback row_counts from S3: raw={raw_count}, processed={valid_count}, rejected={invalid_count}", extra={"correlation_id": correlation_id})
+                else:
+                    logger.warning(f"Missing bucket/key in ingestor_detail: {ingestor_detail}", extra={"correlation_id": correlation_id})
+            except Exception as e:
+                logger.error(f"Failed to fetch S3 fallback: {str(e)}", extra={"correlation_id": correlation_id})
+
+        logger.info(f"Extracted row_counts: raw={raw_count}, processed={valid_count}, rejected={invalid_count}", extra={"correlation_id": correlation_id})
+    except Exception as e:
+        logger.error(f"Failed to parse event detail: {str(e)}", extra={"correlation_id": correlation_id})
+        valid_count, invalid_count, raw_count = 0, 0, 0
+
     key_anomalies = {symbol: analysis["key_anomaly"] for symbol, analysis in output.get("symbols", {}).items() if analysis["key_anomaly"] != "None"}
 
-    # Single item combining full analysis and notification data
     item = {
         "analysis_id": run_id,
         "symbols_analyzed": list(symbol_data.keys()),
         "insights": {
             symbol: {
                 **analysis,
-                "latest_close": str(symbol_data[symbol]["metrics"].get("latest_close", "N/A")),  # Fixed: Use symbol_data[symbol] instead of .get("metrics")
+                "latest_close": str(symbol_data[symbol]["metrics"].get("latest_close", "N/A")),
                 "trend": symbol_data[symbol]["metrics"].get("trend", "unknown"),
                 "momentum": str(symbol_data[symbol]["metrics"].get("momentum", None)) if symbol_data[symbol]["metrics"].get("momentum") is not None else None,
                 "volatility": str(symbol_data[symbol]["metrics"].get("volatility", 0.0)),
@@ -423,4 +511,5 @@ def lambda_handler(event, context):
     except Exception as e:
         logger.error(f"Lambda failed: {str(e)}", extra={"correlation_id": correlation_id})
         raise
+
 

@@ -107,6 +107,35 @@ data "archive_file" "lambda_zip" {
   output_path = "${path.module}/src/notifier_lambda.zip"
 }
 
+resource "aws_iam_policy" "notifier_cloudwatch_policy" {
+  name        = "mejan-notifier-cloudwatch-policy"
+  description = "Policy to allow mejan-analyzer to publish CloudWatch metrics"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = "mejan-pipeline"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ingestor_cloudwatch_attachment" {
+  role       =  aws_iam_role.notifier_lambda_role.name
+  policy_arn = aws_iam_policy.notifier_cloudwatch_policy.arn
+}
+
+
+
 # Now we add the lambda function but for that we need the source code for the Lambda function.
 
 resource "aws_lambda_function" "notifier" {

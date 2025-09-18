@@ -110,6 +110,35 @@ data "archive_file" "lambda_zip" {
   output_path = "${path.module}/src/data_ingestor.zip"
 }
 
+
+resource "aws_iam_policy" "ingestor_cloudwatch_policy" {
+  name        = "mejan-ingestor-cloudwatch-policy"
+  description = "Policy to allow mejan-ingestor to publish CloudWatch metrics"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = "mejan-pipeline"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ingestor_cloudwatch_attachment" {
+  role       =  aws_iam_role.lambda_role.name
+  policy_arn = aws_iam_policy.ingestor_cloudwatch_policy.arn
+}
+
+
 # Now we add the lambda function but for that we need the source code for the Lambda function.
 
 resource "aws_lambda_function" "this" {

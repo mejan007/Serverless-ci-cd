@@ -3,7 +3,6 @@
 What is Serverless?
 
 
-# Table of Contents
 
 # Architecture
 
@@ -53,9 +52,57 @@ Results are persisted through `store_analysis()` which writes analysis results t
 
 ### Cost Breakdown and comparison
 
-## Notifier
+#### Current Pricing Structure
 
-The Email Notifier Lambda completes the pipeline by sending formatted analysis reports via Amazon SES whenever new analysis data is written to DynamoDB. Triggered by **DynamoDB Streams** on `INSERT` events, this Lambda transforms the stored analysis into professional HTML email reports for stakeholders.
+**Amazon Nova Lite**
+- Input tokens: $0.00006 per 1,000 tokens
+- Output tokens: $0.00024 per 1,000 tokens
+- Context window: 300K tokens
+
+### Competitive Comparison
+
+| Model | Input Cost (per 1K tokens) | Output Cost (per 1K tokens) | Cost Advantage |
+|-------|---------------------------|----------------------------|---------------|
+| **Amazon Nova Lite** | $0.00006 | $0.00024 | **Baseline** |
+| Claude 3.5 Haiku | $0.0008 | $0.0004 | 5.0× cheaper overall |
+| Claude 3 Haiku | $0.025 | $0.125 | ~13× cheaper for input, ~2× more expensive for output |
+| GPT-4o Mini | $0.15 | $0.60 | ~2.5× cheaper for input, ~2.5× cheaper for output |
+| Gemini 1.5 Flash | $0.075 | $0.30 | ~1.25× cheaper for input, ~1.25× cheaper for output |
+
+
+
+#### Estimated Usage per Analysis Run:
+
+**Input Token Breakdown:**
+- Base prompt instructions: ~800 tokens
+- Aggregates section: ~200-400 tokens (depending on number of symbols)
+- Per-symbol data section: ~300-500 tokens per symbol
+- OHLCV data points: ~50-100 tokens per data point (up to 52 points per symbol)
+- **Total Input**: 3,000-8,000 tokens (varies by number of symbols and data history)
+
+**Output Token Breakdown:**
+- Executive summary (150-250 words): ~200-350 tokens
+- Per-symbol analysis (4 fields × 1-3 sentences each): ~150-250 tokens per symbol
+- JSON structure overhead: ~50-100 tokens
+- **Total Output**: 1,000-2,000 tokens (for 3-6 symbols typical)
+
+**Monthly Cost Scenarios:**
+
+| Scenario | Runs/Day | Input Tokens | Output Tokens | Nova Lite Cost | Claude 3.5 Haiku Cost | Monthly Savings |
+|----------|----------|--------------|---------------|----------------|-------------------|----------------|
+| Light Usage (2-3 symbols) | 5 | 4,000 | 1,200 | $0.22 | $2.44 | $2.22 (91% savings) |
+| Moderate Usage (4-5 symbols) | 20 | 6,000 | 1,600 | $1.33 | $14.72 | $13.39 (91% savings) |
+| Heavy Usage (6+ symbols) | 100 | 8,000 | 2,000 | $6.60 | $73.20 | $66.60 (91% savings) |
+
+**Annual Cost Projection:**
+- Nova Lite (moderate usage): ~$16.00
+- Claude 3.5 Haiku (moderate usage): ~$177.00
+- **Annual savings: $161.00 (91% cost reduction)**
+
+
+## Notifier Lambda
+
+The Email Notifier Lambda completes the pipeline by sending formatted analysis reports via **Amazon SES** whenever new analysis data is written to DynamoDB. Triggered by **DynamoDB Streams** on `INSERT` events, this Lambda transforms the stored analysis into professional HTML email reports for stakeholders.
 
 Each successful analysis triggers an immediate email notification with correlation IDs for complete pipeline traceability. 
 
