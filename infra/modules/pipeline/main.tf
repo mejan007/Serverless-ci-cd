@@ -103,6 +103,21 @@ resource "aws_iam_role_policy" "codebuild_policy" {
           "cloudwatch:ListTagsForResource"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:Publish",
+          "sns:GetTopicAttributes",
+          "sns:SetTopicAttributes",
+          "sns:CreateTopic",
+          "sns:DeleteTopic",
+          "sns:TagResource",
+          "sns:ListTagsForResource",
+          "sns:Subscribe",
+          "sns:Unsubscribe"
+        ]
+        Resource = "arn:aws:sns:us-east-1:702865854817:mejan-pipeline-alarms"
       }
     ]
   })

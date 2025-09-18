@@ -182,6 +182,8 @@ resource "aws_cloudwatch_metric_alarm" "ingestor_errors" {
     FunctionName = aws_lambda_function.this.function_name
   }
   treat_missing_data = "notBreaching"
+  alarm_actions       = [var.sns_arn]
+  ok_actions          = [var.sns_arn]
 }
 
 resource "aws_cloudwatch_metric_alarm" "ingestor_reject_rate" {
@@ -199,4 +201,6 @@ resource "aws_cloudwatch_metric_alarm" "ingestor_reject_rate" {
     LambdaFunction = aws_lambda_function.this.function_name
   }
   treat_missing_data = "notBreaching"
+  alarm_actions       = [var.sns_arn]
+  ok_actions          = [var.sns_arn]
 }

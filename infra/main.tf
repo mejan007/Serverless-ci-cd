@@ -21,6 +21,17 @@ resource "aws_ses_email_identity" "receiver" {
   email = var.receiver_email
 }
 
+resource "aws_sns_topic" "mejan_pipeline_alarms" {
+  name = "mejan-pipeline-alarms"
+}
+
+# Email subscription (replace with your email)
+resource "aws_sns_topic_subscription" "email_subscription" {
+  topic_arn = aws_sns_topic.mejan_pipeline_alarms.arn
+  protocol  = "email"
+  endpoint  = "mejanlamichhane@lftechnology.com" 
+}
+
 module "data_bucket" {
   source = "./modules/s3"
 
@@ -64,6 +75,8 @@ module "ingestor_function" {
       Name = "${local.common_tags.creator}-ingestor-${random_id.random_suffix.hex}"
     }
   )
+
+  sns_arn = aws_sns_topic.mejan_pipeline_alarms.arn
 }
 
 resource "aws_s3_bucket_notification" "lambda_trigger" {
@@ -100,6 +113,9 @@ module "analyzer_function" {
     }
   )
   table_name = var.table_name
+
+  sns_arn = aws_sns_topic.mejan_pipeline_alarms.arn
+
 }
 
 module "eventbridge" {
@@ -123,6 +139,8 @@ module "notifier" {
 
   sender_email = var.sender_email
   receiver_email = var.receiver_email
+
+  sns_arn = aws_sns_topic.mejan_pipeline_alarms.arn
 
 }
 

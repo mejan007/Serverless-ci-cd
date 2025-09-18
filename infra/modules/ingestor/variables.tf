@@ -43,3 +43,7 @@ variable "account_id" {
   description = "AWS account ID"
   type        = string
 }
+
+variable "sns_arn" {
+  type = string
+}

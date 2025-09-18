@@ -185,5 +185,7 @@ resource "aws_cloudwatch_metric_alarm" "notifier_errors" {
     FunctionName = aws_lambda_function.notifier.function_name
   }
   treat_missing_data = "notBreaching"
+  alarm_actions       = [var.sns_arn]
+  ok_actions          = [var.sns_arn]
 }
 
