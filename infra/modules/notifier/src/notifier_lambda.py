@@ -50,13 +50,13 @@ def deserialize_dynamodb_item(item):
 def create_html_email(analysis_id, row_counts, key_anomalies, executive_summary, aggregates):
     """Create a visually appealing HTML email template."""
     
-    # Format timestamp
+   # Format timestamp
     current_time = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     
     # Calculate total processed percentage
-    total_raw = row_counts.get('raw', 0)
-    processed = row_counts.get('processed', 0)
-    rejected = row_counts.get('rejected', 0)
+    total_raw = int(row_counts.get('raw', 0))  # Convert to int
+    processed = int(row_counts.get('processed', 0))  # Convert to int
+    rejected = int(row_counts.get('rejected', 0))  # Convert to int
     
     processed_pct = (processed / total_raw * 100) if total_raw > 0 else 0
     rejected_pct = (rejected / total_raw * 100) if total_raw > 0 else 0
