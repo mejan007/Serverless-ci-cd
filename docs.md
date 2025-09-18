@@ -108,7 +108,105 @@ Each successful analysis triggers an immediate email notification with correlati
 
 # CI-CD Pipeline
 
+`buildspec_ci.yaml`
 
+```yml
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - echo "Installing OS dependencies..."
+      - yum install -y make zip unzip wget || true
+      - echo "Installing terraform..."
+      - wget https://releases.hashicorp.com/terraform/1.13.1/terraform_1.13.1_linux_amd64.zip
+      - unzip terraform_1.13.1_linux_amd64.zip -d /usr/local/bin/
+      - terraform -version
+      - python3 --version
+      - echo "Installing Python dependencies..."
+      - pip3 install --upgrade pip
+      - pip3 install -r requirements.txt
+  
+  pre_build:
+    commands:
+      - echo "Setting up PYTHONPATH..."
+      - export PYTHONPATH=$PYTHONPATH:$CODEBUILD_SRC_DIR
+      - echo "Listing files for debugging..."
+      - ls -R $CODEBUILD_SRC_DIR
+      - echo "Running python unit tests...."
+      - pytest tests/test_analyzer.py --junitxml=test-results/results.xml
+
+  
+  build:
+    commands:
+      - echo "Initializing terraform...."
+      - cd infra
+      - terraform init -input=false -upgrade
+      - echo "Running terraform validate....."
+      - terraform fmt -recursive
+      - terraform validate
+
+artifacts:
+  files:
+    - '**/*'
+  discard-paths: no
+  exclude-paths:
+    - '.terraform/**'
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'
+    - 'infra/.terraform/**/**'
+```
+
+
+
+`buildspec_cd.yaml`
+
+```yaml
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - echo "Installing OS dependencies..."
+      - yum install -y make zip unzip wget awscli || true  # Add AWS CLI for S3 upload
+      - echo "Installing Terraform 1.13.1..."
+      - wget https://releases.hashicorp.com/terraform/1.13.1/terraform_1.13.1_linux_amd64.zip
+      - unzip terraform_1.13.1_linux_amd64.zip -d /usr/local/bin/
+      - terraform --version
+      - python3 --version
+      - echo "Installing Python dependencies..."
+      - pip3 install --upgrade pip
+      - pip3 install -r requirements.txt  # If needed for Lambda ZIP build
+
+
+  build:
+    commands:
+      - echo "Initializing Terraform..."
+      - cd infra
+      - terraform init -input=false -upgrade
+      - echo "Running Terraform plan..."
+      - terraform plan -out=tfplan
+      - echo "Uploading plan to S3 for review..."
+      - aws s3 cp tfplan s3://mejan-pipeline-artifacts/tfplan.binary 
+      - echo "Terraform plan uploaded."
+
+  post_build:
+    commands:
+      - echo "Applying Terraform..."
+      - terraform apply -auto-approve -input=false tfplan  # Applies the plan
+
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'
+    - 'infra/.terraform/**/*'
+```
 
 # Git-back sync
 
