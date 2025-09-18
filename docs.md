@@ -395,10 +395,60 @@ The post_build phase applies `terraform apply` using the `-auto-approve` flag. T
 
 # Git-back sync
 
+```yaml
 
+name: Auto PR from UAT to DEV
 
+on:
+  push:
+    branches:
+      - uat
 
-# JSON logging (structured)
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up GitHub CLI
+        run: |
+          sudo apt-get install gh
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Check for commits to merge
+        id: check_diff
+        run: |
+          git fetch origin dev
+          COMMITS=$(git rev-list --count origin/dev..origin/uat)
+          echo "Found $COMMITS unmerged commits"
+          echo "commits=$COMMITS" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        if: steps.check_diff.outputs.commits != '0'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_GITHUB }}
+        run: |
+          gh pr create \
+            --base dev \
+            --head uat \
+            --title "Auto PR: Sync UAT → DEV" \
+            --body "This PR was automatically created to merge changes from \`uat\` into \`dev\`."
+
+```
+The Git back sync addresses branch divergence by automatically syncing UAT changes back to development.
+
+The workflow checks for unmerged commits between development and UAT branches using **Git revision counting**. When differences are detected, it automatically creates a pull request from UAT to development using GitHub CLI and a Personal Access Token.
+
+This approach maintains visibility through manual PR review while automating the detection process.
+
 
 
 <!-- ## S3 lifecyle -->
