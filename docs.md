@@ -1,6 +1,7 @@
-# Serverless Assignment
+# Serverless Architecture Deployment
+This assignment implements a serverless data pipeline using AWS Lambda functions that execute code without managing servers. The three Lambda functions (Ingestor, Analyzer, Notifier) run only when triggered by events.
 
-What is Serverless?
+The serverless approach eliminates server provisioning and maintenance while providing automatic scaling for variable stock data processing loads. Each Lambda function triggers the next component through EventBridge and DynamoDB Streams, creating an event-driven workflow that processes data from S3 upload through final email notification without manual intervention.
 
 ---
 
@@ -482,10 +483,42 @@ The `JSONFormatter` class converts Python log records into structured JSON forma
 
 ---
 
+# Least Privilege and security
+
+## Least Privilege
+I applied the principle of least privilege by carefully restricting IAM permissions to exactly what each service needs. For example, the ingestor lambda function only has permissions to:
+
+- Read from the `/inputs` prefix,
+
+- Write only to the `/processed` and `/rejects` prefixes,
+
+- Read/Write marker files under `/processed/hashes`,
+
+- And minimal bucket-level access (`s3:ListBucket`).
+
+This ensures the function cannot access other areas of the bucket or perform unnecessary actions.
+
+The only exception is **AWS CodeBuild**, which required broader permissions because it needed to interact with many of the resources created in the project. For CodeBuild, I documented this exception clearly, so it’s understood that the broader access is due to operational necessity rather than oversight.
+
+Similar principle was applied for other lambda's IAM permissions as well.
+
+## Security
+
+For security, I enabled bucket versioning for the data bucket and state lock as well for the bucket having `tfstate` file.
+
+---
 
 # Screenshots
 
 ## S3 bucket
+
+![alt text](image-5.png)
+
+![alt text](image-6.png)
+
+![alt text](image-7.png)
+
+![alt text](image-8.png)
 
 ## Logs
 
