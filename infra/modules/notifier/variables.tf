@@ -55,3 +55,7 @@ variable "receiver_email" {
 variable "table_stream_arn" {
     type = string
 }
+
+variable "sns_arn" {
+  type = string
+}

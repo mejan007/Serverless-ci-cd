@@ -49,3 +49,7 @@ variable "event_rule_arn" {
 variable "table_name" {
   type = string
 }
+
+variable "sns_arn" {
+  type = string
+}

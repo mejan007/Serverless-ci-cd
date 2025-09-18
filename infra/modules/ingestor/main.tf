@@ -110,6 +110,35 @@ data "archive_file" "lambda_zip" {
   output_path = "${path.module}/src/data_ingestor.zip"
 }
 
+
+resource "aws_iam_policy" "ingestor_cloudwatch_policy" {
+  name        = "mejan-ingestor-cloudwatch-policy"
+  description = "Policy to allow mejan-ingestor to publish CloudWatch metrics"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = "mejan-pipeline"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ingestor_cloudwatch_attachment" {
+  role       =  aws_iam_role.lambda_role.name
+  policy_arn = aws_iam_policy.ingestor_cloudwatch_policy.arn
+}
+
+
 # Now we add the lambda function but for that we need the source code for the Lambda function.
 
 resource "aws_lambda_function" "this" {
@@ -138,3 +167,40 @@ resource "aws_lambda_function" "this" {
 }
 
 
+
+resource "aws_cloudwatch_metric_alarm" "ingestor_errors" {
+  alarm_name          = "mejan-ingestor-lambda-errors"
+  alarm_description   = "Alarm when ingestor Lambda reports errors"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  dimensions = {
+    FunctionName = aws_lambda_function.this.function_name
+  }
+  treat_missing_data = "notBreaching"
+  alarm_actions       = [var.sns_arn]
+  ok_actions          = [var.sns_arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "ingestor_reject_rate" {
+  alarm_name          = "mejan-ingestor-rejected-percentage"
+  alarm_description   = "Triggers when rejected percentage from ingestor exceeds threshold"
+  namespace           = "mejan-pipeline"
+  metric_name         = "RejectedPercentage"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 10.0       # adjust threshold as needed (10%)
+  unit                = "Percent"
+  comparison_operator = "GreaterThanThreshold"
+  dimensions = {
+    LambdaFunction = aws_lambda_function.this.function_name
+  }
+  treat_missing_data = "notBreaching"
+  alarm_actions       = [var.sns_arn]
+  ok_actions          = [var.sns_arn]
+}

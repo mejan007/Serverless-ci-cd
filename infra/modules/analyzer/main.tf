@@ -103,6 +103,35 @@ data "archive_file" "lambda_zip" {
   output_path = "${path.module}/src/data_analyzer.zip"
 }
 
+
+resource "aws_iam_policy" "analyzer_cloudwatch_policy" {
+  name        = "mejan-analyzer-cloudwatch-policy"
+  description = "Policy to allow mejan-analyzer to publish CloudWatch metrics"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = "mejan-pipeline"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ingestor_cloudwatch_attachment" {
+  role       =  aws_iam_role.analyzer_lambda_role.name
+  policy_arn = aws_iam_policy.analyzer_cloudwatch_policy.arn
+}
+
+
 # Now we add the lambda function but for that we need the source code for the Lambda function.
 
 resource "aws_lambda_function" "analyzer" {
@@ -141,6 +170,8 @@ resource "aws_lambda_function" "analyzer" {
 
 
 
+
+
 # Lambda permission to allow S3 to invoke lambda
 
 # resource "aws_lambda_permission" "allow_s3" {
@@ -172,4 +203,41 @@ resource "aws_lambda_permission" "allow_eventbridge" {
   function_name = aws_lambda_function.analyzer.function_name
   principal     = "events.amazonaws.com"
   source_arn    = var.event_rule_arn
+}
+
+
+resource "aws_cloudwatch_metric_alarm" "analyzer_errors" {
+  alarm_name          = "mejan-analyzer-lambda-errors"
+  alarm_description   = "Alarm when analyzer Lambda reports errors"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  dimensions = {
+    FunctionName = aws_lambda_function.analyzer.function_name
+  }
+  treat_missing_data = "notBreaching"
+  alarm_actions       = [var.sns_arn]
+  ok_actions          = [var.sns_arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "bedrock_retry_exceeded" {
+  alarm_name          = "mejan-analyzer-bedrock-retry-exceeded"
+  alarm_description   = "Triggers when Bedrock retries exceed 5"
+  namespace           = "mejan-pipeline"
+  metric_name         = "BedrockRetryExceeded"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  dimensions = {
+    LambdaFunction = aws_lambda_function.analyzer.function_name
+  }
+  treat_missing_data = "notBreaching"
+  alarm_actions       = [var.sns_arn]
+  ok_actions          = [var.sns_arn]
 }

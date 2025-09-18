@@ -91,6 +91,33 @@ resource "aws_iam_role_policy" "codebuild_policy" {
         Resource = [
           "arn:aws:codepipeline:us-east-1:702865854817:mejan-pipeline"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:DescribeAlarms",
+          "cloudwatch:PutMetricAlarm",
+          "cloudwatch:DeleteMetricAlarm",
+          "cloudwatch:DescribeAlarmHistory",
+          "cloudwatch:PutMetricData",
+          "cloudwatch:ListTagsForResource"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:Publish",
+          "sns:GetTopicAttributes",
+          "sns:SetTopicAttributes",
+          "sns:CreateTopic",
+          "sns:DeleteTopic",
+          "sns:TagResource",
+          "sns:ListTagsForResource",
+          "sns:Subscribe",
+          "sns:Unsubscribe"
+        ]
+        Resource = "arn:aws:sns:us-east-1:702865854817:mejan-pipeline-alarms"
       }
     ]
   })
@@ -108,7 +135,7 @@ resource "aws_codebuild_project" "ci" {
   }
   environment {
     compute_type = "BUILD_GENERAL1_SMALL"
-    image        = "aws/codebuild/standard:5.0"
+    image        = "aws/codebuild/standard:7.0"
     type         = "LINUX_CONTAINER"
   }
   source {
@@ -130,7 +157,7 @@ resource "aws_codebuild_project" "cd" {
 
   environment {
     compute_type = "BUILD_GENERAL1_SMALL"
-    image        = "aws/codebuild/standard:5.0"
+    image        = "aws/codebuild/standard:7.0"
     type         = "LINUX_CONTAINER"
   }
 

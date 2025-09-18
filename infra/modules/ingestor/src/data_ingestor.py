@@ -30,6 +30,36 @@ PROCESSED_PREFIX = 'processed/'
 REJECTS_PREFIX = 'rejects/'
 HASHES_PREFIX = 'processed/hashes/'
 
+cloudwatch = boto3.client("cloudwatch")
+
+def publish_reject_metric(valid_count, invalid_count, correlation_id=None):
+    total = valid_count + invalid_count
+    if total == 0:
+        # Nothing to publish
+        return
+    try:
+        reject_percentage = (invalid_count / total) * 100.0
+        cloudwatch.put_metric_data(
+            Namespace="mejan-pipeline",
+            MetricData=[
+                {
+                    "MetricName": "RejectedPercentage",
+                    "Dimensions": [
+                        {"Name": "LambdaFunction", "Value": os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "Ingestor")}
+                    ],
+                    "Unit": "Percent",
+                    "Value": reject_percentage
+                }
+            ]
+        )
+        logger.info(f"Published RejectedPercentage={reject_percentage:.2f}%", extra={'correlation_id': correlation_id})
+    except Exception as e:
+        # Never fail the whole Lambda because metric publishing failed
+        logger.error(f"Failed to publish reject metric: {str(e)}", extra={'correlation_id': correlation_id})
+
+
+
+
 def validate_record(symbol, record):
     """
     Validates a single stock record.
@@ -107,7 +137,7 @@ def process_stock_data(data, correlation_id):
         
         for value in symbol_data['values']:
             # Flatten: add symbol to each record
-            record = {**value, 'symbol': symbol}
+            record = {**value, 'symbol': symbol, 'interval': meta.get('interval','unknown')}
             is_valid, error = validate_record(symbol, record)
             
             if is_valid:
@@ -149,6 +179,142 @@ def write_to_s3(records, bucket_name, prefix, filename, correlation_id):
         logger.error(f"Failed to write to S3: {str(e)}", extra={'correlation_id': correlation_id})
         raise
 
+# def lambda_handler(event, context):
+#     """
+#     Lambda handler triggered by S3 event.
+#     Processes the input file if its ETag hasn't been processed before.
+#     Uses S3 marker files for deduplication, no DynamoDB.
+#     """
+#     correlation_id = str(uuid.uuid4())
+    
+#     # Add correlation_id to all log records
+#     logger.handlers[0].formatter._style._fmt = '%(message)s'
+    
+#     try:
+#         logger.info("Lambda invocation started", extra={'correlation_id': correlation_id})
+        
+#         # Extract bucket and key from S3 event
+#         if not event['Records']:
+#             raise ValueError("No S3 records in event")
+        
+#         s3_record = event['Records'][0]['s3']
+#         bucket_name = s3_record['bucket']['name']
+#         key = urllib.parse.unquote_plus(s3_record['object']['key'], encoding='utf-8')
+        
+#         if not key.startswith('inputs/'):
+#             logger.info(f"File {key} is not in inputs/ folder, skipping", extra={'correlation_id': correlation_id})
+#             return {
+#                 'statusCode': 200,
+#                 'body': json.dumps({
+#                     'correlation_id': correlation_id,
+#                     'message': f"File {key} ignored",
+#                     'valid_count': 0,
+#                     'invalid_count': 0
+#                 })
+#             }
+        
+#         # Get ETag using HeadObject
+#         response = s3_client.head_object(Bucket=bucket_name, Key=key)
+#         etag = response['ETag'].strip('"')  # Remove quotes from ETag
+        
+#         # Check if ETag was already processed (marker file exists)
+#         hash_key = f"{HASHES_PREFIX}{etag}"
+#         try:
+#             s3_client.head_object(Bucket=bucket_name, Key=hash_key)
+#             logger.info(f"File {key} with ETag {etag} already processed, skipping", extra={'correlation_id': correlation_id})
+#             return {
+#                 'statusCode': 200,
+#                 'body': json.dumps({
+#                     'correlation_id': correlation_id,
+#                     'message': f"File {key} with ETag {etag} already processed",
+#                     'valid_count': 0,
+#                     'invalid_count': 0
+#                 })
+#             }
+#         except s3_client.exceptions.ClientError as e:
+#             if e.response['Error']['Code'] != '404':
+#                 raise
+#             # 404 means marker file doesn't exist, proceed with processing
+        
+#         # Download and process the file
+#         try:
+#             response = s3_client.get_object(Bucket=bucket_name, Key=key)
+#             raw_data = response['Body'].read().decode('utf-8')
+#             data = json.loads(raw_data)
+#             logger.info(f"Successfully downloaded and parsed {key}", extra={'correlation_id': correlation_id})
+#         except Exception as e:
+#             logger.error(f"Error downloading or parsing file {key}: {str(e)}", extra={'correlation_id': correlation_id})
+#             raise
+        
+#         valid_records, invalid_records = process_stock_data(data, correlation_id)
+#         filename = os.path.basename(key)
+#         processed_key = write_to_s3(valid_records, bucket_name, PROCESSED_PREFIX, filename, correlation_id)
+#         write_to_s3(invalid_records, bucket_name, REJECTS_PREFIX, filename, correlation_id)
+        
+#         # Create marker file to indicate ETag was processed
+#         try:
+#             publish_reject_metric(len(valid_records), len(invalid_records), correlation_id)
+#         except Exception as e:
+#             logger.error(f"Failed to publish reject metric: {str(e)}", extra={'correlation_id': correlation_id})
+
+#         try:
+#             s3_client.put_object(
+#                 Bucket=bucket_name,
+#                 Key=hash_key,
+#                 Body=json.dumps({
+#                     's3_key': key,
+#                     'processed_at': datetime.datetime.utcnow().isoformat(),
+#                     'correlation_id': correlation_id
+#                 }).encode('utf-8'),
+#                 ContentType='application/json'
+#             )
+#             logger.info(f"Created marker file s3://{bucket_name}/{hash_key}", extra={'correlation_id': correlation_id})
+#         except Exception as e:
+#             logger.error(f"Failed to create marker file: {str(e)}", extra={'correlation_id': correlation_id})
+#             raise
+        
+#         logger.info("Lambda processing completed successfully", extra={'correlation_id': correlation_id})
+        
+
+#         if processed_key:
+#             try:
+#                 events_client.put_events(
+#                     Entries=[
+#                         {
+#                             'Source': 'mejan.data-ingestor',
+#                             'DetailType': 'IngestorCompleted',
+#                             'Detail': json.dumps({
+#                                 'bucket': {'name': bucket_name},
+#                                 'key': processed_key,
+#                                 'valid_count': len(valid_records),
+#                                 'invalid_count': len(invalid_records),
+#                                 'raw_count': len(valid_records) + len(invalid_records),
+#                                 'filename': filename,
+#                                 'processed_marker': hash_key
+#                             }),
+#                             'EventBusName': 'default'
+#                         }
+#                     ]
+#                 )
+#                 logger.info(f"Published EventBridge event for s3://{bucket_name}/{processed_key}", extra={'correlation_id': correlation_id})
+#                 # logger.info(f"EventBridge event detail: {json.dumps(event_detail, default=str)}", extra={"correlation_id": correlation_id})
+#             except Exception as e:
+#                 logger.error(f"Failed to publish EventBridge event: {str(e)}", extra={'correlation_id': correlation_id})
+#                 raise
+
+#         return {
+#             'statusCode': 200,
+#             'body': json.dumps({
+#                 'correlation_id': correlation_id,
+#                 'valid_count': len(valid_records),
+#                 'invalid_count': len(invalid_records)
+#             })
+#         }
+    
+#     except Exception as e:
+#         logger.error(f"Lambda failed: {str(e)}", extra={'correlation_id': correlation_id})
+#         raise
+
 def lambda_handler(event, context):
     """
     Lambda handler triggered by S3 event.
@@ -157,7 +323,6 @@ def lambda_handler(event, context):
     """
     correlation_id = str(uuid.uuid4())
     
-    # Add correlation_id to all log records
     logger.handlers[0].formatter._style._fmt = '%(message)s'
     
     try:
@@ -185,9 +350,9 @@ def lambda_handler(event, context):
         
         # Get ETag using HeadObject
         response = s3_client.head_object(Bucket=bucket_name, Key=key)
-        etag = response['ETag'].strip('"')  # Remove quotes from ETag
+        etag = response['ETag'].strip('"')
         
-        # Check if ETag was already processed (marker file exists)
+        # Check if ETag was already processed
         hash_key = f"{HASHES_PREFIX}{etag}"
         try:
             s3_client.head_object(Bucket=bucket_name, Key=hash_key)
@@ -204,7 +369,6 @@ def lambda_handler(event, context):
         except s3_client.exceptions.ClientError as e:
             if e.response['Error']['Code'] != '404':
                 raise
-            # 404 means marker file doesn't exist, proceed with processing
         
         # Download and process the file
         try:
@@ -221,7 +385,12 @@ def lambda_handler(event, context):
         processed_key = write_to_s3(valid_records, bucket_name, PROCESSED_PREFIX, filename, correlation_id)
         write_to_s3(invalid_records, bucket_name, REJECTS_PREFIX, filename, correlation_id)
         
-        # Create marker file to indicate ETag was processed
+        # Create marker file
+        try:
+            publish_reject_metric(len(valid_records), len(invalid_records), correlation_id)
+        except Exception as e:
+            logger.error(f"Failed to publish reject metric: {str(e)}", extra={'correlation_id': correlation_id})
+
         try:
             s3_client.put_object(
                 Bucket=bucket_name,
@@ -239,19 +408,25 @@ def lambda_handler(event, context):
             raise
         
         logger.info("Lambda processing completed successfully", extra={'correlation_id': correlation_id})
-        
 
         if processed_key:
             try:
+                event_detail = {
+                    'bucket': {'name': bucket_name},
+                    'key': processed_key,
+                    'valid_count': len(valid_records),
+                    'invalid_count': len(invalid_records),
+                    'raw_count': len(valid_records) + len(invalid_records),
+                    'filename': filename,
+                    'processed_marker': hash_key
+                }
+                logger.info(f"EventBridge event detail: {json.dumps(event_detail, default=str)}", extra={'correlation_id': correlation_id})
                 events_client.put_events(
                     Entries=[
                         {
                             'Source': 'mejan.data-ingestor',
                             'DetailType': 'IngestorCompleted',
-                            'Detail': json.dumps({
-                                'bucket': {'name': bucket_name},
-                                'key': processed_key
-                            }),
+                            'Detail': json.dumps(event_detail),
                             'EventBusName': 'default'
                         }
                     ]
